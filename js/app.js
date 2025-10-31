@@ -23,6 +23,7 @@ const editInstructions = document.getElementById('editInstructions');
 const saveEditBtn = document.getElementById('saveEditBtn');
 const searchInput = document.getElementById('searchInput');
 const exportBtn = document.getElementById('exportBtn');
+const updateBtn = document.getElementById('updateBtn');
 const importBtn = document.getElementById('importBtn');
 const importFile = document.getElementById('importFile');
 const installBtn = document.getElementById('installBtn');
@@ -410,6 +411,10 @@ form.addEventListener('submit', async (e) => {
     const rec = await importFromUrl(url);
     await showDetail(rec.id);
     urlInput.value='';
+  } catch (err) {
+    console.error(err);
+    const message = err && err.message ? err.message : 'Could not import that recipe.';
+    setStatus(`Import failed: ${message}`, 'error');
   } finally {
     document.getElementById('fetchBtn').disabled = false;
   }
@@ -486,6 +491,65 @@ importFile.addEventListener('change', async () => {
     importFile.value = '';
   }
 });
+
+const OFFLINE_ASSETS = [
+  './',
+  './index.html',
+  './css/styles.css',
+  './js/app.js',
+  './js/idb-keyval.js',
+  './assets/icon-192.png',
+  './assets/icon-512.png',
+  './manifest.webmanifest',
+  './sw.js'
+];
+
+async function forceUpdateApp(){
+  if (!updateBtn) return;
+  if (!('caches' in window)) {
+    setStatus('Cache storage is not supported in this browser.', 'error');
+    return;
+  }
+  updateBtn.disabled = true;
+  setStatus('Refreshing app files…');
+  let reloadScheduled = false;
+  try {
+    const cacheNames = await caches.keys();
+    await Promise.all(cacheNames.map(name => caches.delete(name)));
+    if ('serviceWorker' in navigator) {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        await reg?.update();
+      } catch (swError) {
+        console.warn('Service worker update failed', swError);
+      }
+    }
+    await Promise.all(OFFLINE_ASSETS.map(async (asset) => {
+      try {
+        const res = await fetch(asset, {cache: 'reload'});
+        if (!res.ok) {
+          throw new Error(`${res.status} ${res.statusText}`.trim());
+        }
+      } catch (assetError) {
+        console.warn('Asset refresh failed', asset, assetError);
+        throw assetError;
+      }
+    }));
+    setStatus('App files refreshed. Reloading…');
+    reloadScheduled = true;
+    setTimeout(() => window.location.reload(), 500);
+  } catch (error) {
+    console.error(error);
+    const message = error && error.message ? error.message : 'Unknown error.';
+    setStatus(`Update failed: ${message}`, 'error');
+  } finally {
+    if (!reloadScheduled) {
+      updateBtn.disabled = false;
+    }
+  }
+}
+
+updateBtn?.addEventListener('click', forceUpdateApp);
 
 // On load
 refreshList();
