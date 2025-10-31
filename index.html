@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" sizes="192x192" href="assets/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <title>Recipe Box</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <meta name="description" content="A mobile-friendly PWA to save, view, and use recipes offline. Paste a link and we'll extract the details.">
+</head>
+<body>
+  <header class="app-header">
+    <h1>Recipe Box</h1>
+    <button id="installBtn" class="btn secondary" hidden>Install</button>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h2>Add a Recipe</h2>
+      <form id="fetchForm" class="grid">
+        <label for="recipeUrl" class="sr-only">Recipe URL</label>
+        <input id="recipeUrl" type="url" required placeholder="https://example.com/your-favorite-recipe">
+        <button class="btn primary" type="submit" id="fetchBtn">Import</button>
+      </form>
+      <p class="helper">Tip: Most sites with <code>schema.org/Recipe</code> will import perfectly.</p>
+      <div id="status" class="status" aria-live="polite"></div>
+    </section>
+
+    <section class="card">
+      <div class="section-header">
+        <h2>Your Recipes</h2>
+        <div class="actions">
+          <input id="searchInput" type="search" placeholder="Search saved recipes…">
+          <button id="exportBtn" class="btn subtle">Export</button>
+          <input type="file" id="importFile" accept="application/json" hidden>
+          <button id="importBtn" class="btn subtle">Import</button>
+        </div>
+      </div>
+      <ul id="recipeList" class="recipe-list"></ul>
+      <p id="emptyState" class="empty">No recipes yet. Import one above.</p>
+    </section>
+
+    <section id="detailView" class="detail card" hidden>
+      <div class="detail-header">
+        <button id="backBtn" class="btn subtle">&larr; Back</button>
+        <div class="spacer"></div>
+        <button id="editBtn" class="btn subtle">Edit</button>
+        <button id="deleteBtn" class="btn danger">Delete</button>
+      </div>
+      <h2 id="detailTitle"></h2>
+      <p id="detailSource" class="source"></p>
+      <div class="meta" id="detailMeta"></div>
+      <h3>Ingredients</h3>
+      <ul id="detailIngredients" class="ingredients"></ul>
+      <h3>Steps</h3>
+      <ol id="detailInstructions" class="instructions"></ol>
+      <details id="notesWrap">
+        <summary>Notes</summary>
+        <textarea id="detailNotes" placeholder="Add your notes (offline-capable)…"></textarea>
+        <button id="saveNotesBtn" class="btn primary">Save Notes</button>
+      </details>
+    </section>
+
+    <dialog id="editDialog">
+      <form id="editForm" method="dialog">
+        <h3>Edit Recipe</h3>
+        <label>Title <input id="editTitle" required></label>
+        <label>Ingredients <textarea id="editIngredients" rows="8" placeholder="One per line"></textarea></label>
+        <label>Steps <textarea id="editInstructions" rows="10" placeholder="One per line or numbered"></textarea></label>
+        <menu>
+          <button value="cancel" class="btn subtle">Cancel</button>
+          <button id="saveEditBtn" value="default" class="btn primary">Save</button>
+        </menu>
+      </form>
+    </dialog>
+  </main>
+
+  <footer class="app-footer">
+    <small>Works offline · Install from your browser menu · <a href="https://schema.org/Recipe" target="_blank" rel="noopener">Recipe Schema</a></small>
+  </footer>
+
+  <script src="js/idb-keyval.js"></script>
+  <script src="js/app.js" type="module"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(console.error);
+      });
+    }
+  </script>
+</body>
+</html>
