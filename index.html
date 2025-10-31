@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#f4ebe0">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" sizes="192x192" href="assets/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
@@ -13,7 +13,13 @@
 </head>
 <body>
   <header class="app-header">
-    <h1>Recipe Box</h1>
+    <div class="brand">
+      <span class="brand-icon" aria-hidden="true">🥣</span>
+      <div class="brand-copy">
+        <h1>Recipe Box</h1>
+        <p class="tagline">Collect, organize, and savor your favorite dishes</p>
+      </div>
+    </div>
     <button id="installBtn" class="btn secondary" hidden>Install</button>
   </header>
 
@@ -34,9 +40,9 @@
         <h2>Your Recipes</h2>
         <div class="actions">
           <input id="searchInput" type="search" placeholder="Search saved recipes…">
-          <button id="exportBtn" class="btn subtle">Export</button>
+          <button id="exportBtn" class="btn subtle" type="button">Export</button>
           <input type="file" id="importFile" accept="application/json" hidden>
-          <button id="importBtn" class="btn subtle">Import</button>
+          <button id="importBtn" class="btn subtle" type="button">Import</button>
         </div>
       </div>
       <ul id="recipeList" class="recipe-list"></ul>
@@ -45,10 +51,10 @@
 
     <section id="detailView" class="detail card" hidden>
       <div class="detail-header">
-        <button id="backBtn" class="btn subtle">&larr; Back</button>
+        <button id="backBtn" class="btn subtle" type="button">&larr; Back</button>
         <div class="spacer"></div>
-        <button id="editBtn" class="btn subtle">Edit</button>
-        <button id="deleteBtn" class="btn danger">Delete</button>
+        <button id="editBtn" class="btn subtle" type="button">Edit</button>
+        <button id="deleteBtn" class="btn danger" type="button">Delete</button>
       </div>
       <h2 id="detailTitle"></h2>
       <p id="detailSource" class="source"></p>
@@ -60,7 +66,7 @@
       <details id="notesWrap">
         <summary>Notes</summary>
         <textarea id="detailNotes" placeholder="Add your notes (offline-capable)…"></textarea>
-        <button id="saveNotesBtn" class="btn primary">Save Notes</button>
+        <button id="saveNotesBtn" class="btn primary" type="button">Save Notes</button>
       </details>
     </section>
 
