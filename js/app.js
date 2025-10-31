@@ -44,7 +44,11 @@ installBtn?.addEventListener('click', async () => {
 
 function setStatus(msg, type='info'){
   statusEl.textContent = msg;
-  statusEl.style.color = type === 'error' ? '#fca5a5' : '#94a3b8';
+  if (type === 'error') {
+    statusEl.classList.add('error');
+  } else {
+    statusEl.classList.remove('error');
+  }
 }
 
 function normalizeArray(val){
@@ -286,7 +290,7 @@ async function refreshList(filter=''){
     const li = document.createElement('li');
     li.className = 'recipe-item';
     li.innerHTML = \`
-      <div class="dot" style="width:10px;height:10px;border-radius:50%;background:#22c55e;"></div>
+      <div class="dot"></div>
       <div class="stack">
         <div class="title">\${rec.title}</div>
         <div class="domain">\${domainFromUrl(rec.url)}</div>
@@ -303,7 +307,16 @@ async function showDetail(id){
   if (!rec) return;
   detail.dataset.id = id;
   detailTitle.textContent = rec.title || 'Untitled Recipe';
-  detailSource.textContent = rec.url || '';
+  detailSource.innerHTML = '';
+  if (rec.url) {
+    const link = document.createElement('a');
+    link.href = rec.url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = domainFromUrl(rec.url) || rec.url;
+    link.title = rec.url;
+    detailSource.appendChild(link);
+  }
   // meta can show servings / time if available later
   detailMeta.innerHTML = '';
   detailIngredients.innerHTML = '';
@@ -400,18 +413,51 @@ importBtn.addEventListener('click', ()=> importFile.click());
 importFile.addEventListener('change', async () => {
   const file = importFile.files[0];
   if (!file) return;
-  const text = await file.text();
   try{
-    const arr = JSON.parse(text);
-    for (const rec of arr){
-      if (!rec.id) rec.id = crypto.randomUUID();
-      await idbkv.set(rec.id, rec);
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    let recipes = [];
+    if (Array.isArray(parsed)) {
+      recipes = parsed;
+    } else if (Array.isArray(parsed.recipes)) {
+      recipes = parsed.recipes;
+    } else if (Array.isArray(parsed.items)) {
+      recipes = parsed.items;
+    } else if (parsed && typeof parsed === 'object') {
+      recipes = Object.values(parsed).filter(val => val && typeof val === 'object' && (
+        val.title || val.name || val.ingredients || val.recipeIngredient
+      ));
+    }
+    if (!recipes.length) {
+      throw new Error('No recipes found in that file.');
+    }
+    let imported = 0;
+    for (const raw of recipes){
+      if (!raw || typeof raw !== 'object') continue;
+      const ingredientsSource = raw.ingredients ?? raw.recipeIngredient;
+      const instructionsSource = raw.instructions ?? raw.recipeInstructions;
+      const createdAtCandidate = Number(raw.createdAt);
+      const createdAt = Number.isFinite(createdAtCandidate) && createdAtCandidate > 0 ? createdAtCandidate : Date.now();
+      const recipe = {
+        id: raw.id || crypto.randomUUID(),
+        url: sanitizeText(raw.url || raw.source || ''),
+        title: sanitizeText(raw.title || raw.name || 'Untitled Recipe'),
+        ingredients: ingredientsToArray(ingredientsSource),
+        instructions: stepsToArray(instructionsSource),
+        createdAt,
+        notes: sanitizeText(raw.notes || '')
+      };
+      await idbkv.set(recipe.id, recipe);
+      imported++;
+    }
+    if (!imported) {
+      throw new Error('No valid recipes found in that file.');
     }
     await refreshList(searchInput.value);
-    setStatus('Import complete.');
+    setStatus(`Imported ${imported} recipe${imported === 1 ? '' : 's'}.`);
   }catch(e){
     console.error(e);
-    setStatus('Import failed: invalid JSON.', 'error');
+    setStatus(`Import failed: ${e.message || 'invalid file.'}`, 'error');
   } finally {
     importFile.value = '';
   }
