@@ -1,573 +1,485 @@
-// Recipe Box PWA logic
-const form = document.getElementById('fetchForm');
-const urlInput = document.getElementById('recipeUrl');
 const statusEl = document.getElementById('status');
-const listEl = document.getElementById('recipeList');
-const emptyEl = document.getElementById('emptyState');
-const detail = document.getElementById('detailView');
-const backBtn = document.getElementById('backBtn');
-const deleteBtn = document.getElementById('deleteBtn');
-const editBtn = document.getElementById('editBtn');
-const detailTitle = document.getElementById('detailTitle');
-const detailSource = document.getElementById('detailSource');
-const detailMeta = document.getElementById('detailMeta');
-const detailIngredients = document.getElementById('detailIngredients');
-const detailInstructions = document.getElementById('detailInstructions');
-const notesWrap = document.getElementById('notesWrap');
-const notesEl = document.getElementById('detailNotes');
-const saveNotesBtn = document.getElementById('saveNotesBtn');
-const editDialog = document.getElementById('editDialog');
-const editTitle = document.getElementById('editTitle');
-const editIngredients = document.getElementById('editIngredients');
-const editInstructions = document.getElementById('editInstructions');
-const saveEditBtn = document.getElementById('saveEditBtn');
-const searchInput = document.getElementById('searchInput');
-const exportBtn = document.getElementById('exportBtn');
-const updateBtn = document.getElementById('updateBtn');
-const importBtn = document.getElementById('importBtn');
-const importFile = document.getElementById('importFile');
+const vaultPanel = document.getElementById('vaultPanel');
+const vaultStatusEl = document.getElementById('vaultStatus');
+const videoListEl = document.getElementById('videoList');
+const emptyVaultEl = document.getElementById('emptyVault');
+const addLinkForm = document.getElementById('addLinkForm');
+const titleInput = document.getElementById('videoTitle');
+const urlInput = document.getElementById('videoUrl');
+const notesInput = document.getElementById('videoNotes');
+const lockBtn = document.getElementById('lockBtn');
 const installBtn = document.getElementById('installBtn');
+const passwordDialog = document.getElementById('passwordDialog');
+const passwordForm = document.getElementById('passwordForm');
+const passwordInput = document.getElementById('passwordInput');
+const confirmPasswordWrap = document.getElementById('confirmPasswordWrap');
+const confirmPasswordInput = document.getElementById('confirmPasswordInput');
+const passwordDialogTitle = document.getElementById('passwordDialogTitle');
+const passwordDialogDescription = document.getElementById('passwordDialogDescription');
+const passwordSubmitBtn = document.getElementById('passwordSubmitBtn');
+const passwordError = document.getElementById('passwordError');
+const cancelPasswordBtn = document.getElementById('cancelPasswordBtn');
 
-function generateId(){
-  try {
-    if (typeof crypto !== 'undefined') {
-      if (typeof crypto.randomUUID === 'function') {
-        return crypto.randomUUID();
-      }
-      if (typeof crypto.getRandomValues === 'function') {
-        const bytes = new Uint8Array(16);
-        crypto.getRandomValues(bytes);
-        // Per RFC 4122 section 4.4
-        bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
-        bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant
-        const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0'));
-        return `${hex.slice(0,4).join('')}-${hex.slice(4,6).join('')}-${hex.slice(6,8).join('')}-${hex.slice(8,10).join('')}-${hex.slice(10,16).join('')}`;
-      }
-    }
-  } catch (e) {
-    // Ignore and fall through to timestamp/random fallback
+const SECRET_SEQUENCE = ['left', 'right', 'center'];
+const VAULT_KEY = 'recipeBoxVaultEntries';
+const SALT_KEY = 'recipeBoxVaultSalt';
+const HASH_KEY = 'recipeBoxVaultHash';
+const SECRET_RESET_MS = 2200;
+const PBKDF2_ITERATIONS = 150000;
+
+let secretIndex = 0;
+let secretTimer = null;
+let deferredPrompt = null;
+let dialogMode = 'unlock';
+let unlocked = false;
+let cryptoKey = null;
+let decryptedEntries = [];
+let pendingSharedUrl = null;
+
+function setStatus(target, message, type = 'info') {
+  if (!target) return;
+  target.textContent = message || '';
+  target.classList.remove('error', 'success');
+  if (type === 'error') {
+    target.classList.add('error');
+  } else if (type === 'success') {
+    target.classList.add('success');
+  }
+}
+
+function supportsEncryption() {
+  return typeof window.crypto !== 'undefined' && typeof window.crypto.subtle !== 'undefined';
+}
+
+function base64ToArrayBuffer(base64) {
+  const binary = atob(base64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function utf8Encode(text) {
+  return new TextEncoder().encode(text);
+}
+
+async function deriveKeyMaterial(password) {
+  return await crypto.subtle.importKey('raw', utf8Encode(password), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
+}
+
+async function deriveEncryptionKey(password, saltBuffer) {
+  const keyMaterial = await deriveKeyMaterial(password);
+  return await crypto.subtle.deriveKey({
+    name: 'PBKDF2',
+    salt: saltBuffer,
+    iterations: PBKDF2_ITERATIONS,
+    hash: 'SHA-256'
+  }, keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+
+async function derivePasswordHash(password, saltBuffer) {
+  const keyMaterial = await deriveKeyMaterial(password);
+  const bits = await crypto.subtle.deriveBits({
+    name: 'PBKDF2',
+    salt: saltBuffer,
+    iterations: PBKDF2_ITERATIONS,
+    hash: 'SHA-256'
+  }, keyMaterial, 256);
+  return arrayBufferToBase64(bits);
+}
+
+function generateId() {
+  if (typeof crypto?.randomUUID === 'function') {
+    return crypto.randomUUID();
   }
   const now = Date.now().toString(16);
   const rand = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(16);
   return `${now}-${rand}`;
 }
 
-let deferredPrompt = null;
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-  installBtn.hidden = false;
-});
-installBtn?.addEventListener('click', async () => {
-  installBtn.hidden = true;
-  if (deferredPrompt) {
-    deferredPrompt.prompt();
-    await deferredPrompt.userChoice;
-    deferredPrompt = null;
-  }
-});
-
-function setStatus(msg, type='info'){
-  statusEl.textContent = msg;
-  if (type === 'error') {
-    statusEl.classList.add('error');
-  } else {
-    statusEl.classList.remove('error');
-  }
-}
-
-function normalizeArray(val){
-  if (!val) return [];
-  if (Array.isArray(val)) return val;
-  return [val];
-}
-
-function sanitizeText(s){
-  return (s||'').toString().trim();
-}
-
-function stepsToArray(steps){
-  if (!steps) return [];
-  if (Array.isArray(steps)){
-    return steps.map(s => {
-      if (typeof s === 'string') return sanitizeText(s);
-      if (s && typeof s === 'object'){
-        return sanitizeText(s.text || s.name || '');
-      }
-      return '';
-    }).filter(Boolean);
-  }
-  return sanitizeText(steps).split(/\n+|\r+|\d+\.|^\s*[-•]\s*/gm).map(s=>s.trim()).filter(Boolean);
-}
-
-function ingredientsToArray(ings){
-  if (!ings) return [];
-  if (Array.isArray(ings)) return ings.map(sanitizeText).filter(Boolean);
-  return sanitizeText(ings).split(/\n+|\r+|\s*;\s*/gm).map(s=>s.trim()).filter(Boolean);
-}
-
-function domainFromUrl(u){
-  try{ return new URL(u).hostname.replace(/^www\./,''); }catch{ return ''; }
-}
-
-// Heuristic parse from plain text (Jina Reader)
-function parseFromText(text, sourceUrl){
-  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  let title = lines[0] || 'Untitled Recipe';
-  // Find headings
-  let ingStart = lines.findIndex(l => /^ingredients?\b/i.test(l));
-  let instStart = lines.findIndex(l => /^(instructions?|directions?)\b/i.test(l));
-  const ingredients = [];
-  const steps = [];
-  if (ingStart !== -1){
-    for (let i = ingStart+1; i < lines.length; i++){
-      if (/^(instructions?|directions?)\b/i.test(lines[i])) break;
-      if (lines[i].length > 1) ingredients.push(lines[i].replace(/^[-•\d\.\)]\s*/,'').trim());
-    }
-  }
-  if (instStart !== -1){
-    for (let i = instStart+1; i < lines.length; i++){
-      if (/^(notes?)\b/i.test(lines[i])) break;
-      steps.push(lines[i].replace(/^[-•\d\.\)]\s*/,'').trim());
-    }
-  }
+async function encryptEntry(entry) {
+  if (!cryptoKey) throw new Error('Vault is locked.');
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const payload = utf8Encode(JSON.stringify(entry));
+  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cryptoKey, payload);
   return {
-    id: generateId(),
-    url: sourceUrl,
-    title,
-    ingredients,
-    instructions: steps,
-    createdAt: Date.now(),
-    notes: ''
+    id: entry.id,
+    iv: arrayBufferToBase64(iv.buffer),
+    data: arrayBufferToBase64(encrypted)
   };
 }
 
-// Extract JSON-LD Recipe objects from HTML
-function extractRecipeFromHTML(html, sourceUrl){
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  // JSON-LD
-  const ldBlocks = Array.from(doc.querySelectorAll('script[type="application/ld+json"]'));
-  for (const script of ldBlocks){
-    try {
-      const data = JSON.parse(script.textContent.trim());
-      const stack = Array.isArray(data) ? data : [data];
-      const findRecipe = (node) => {
-        if (!node || typeof node !== 'object') return null;
-        const typeField = node['@type'];
-        const types = normalizeArray(typeField).map(s=>s.toLowerCase());
-        if (types.includes('recipe')) return node;
-        // Graph or nested
-        const inGraph = node['@graph'];
-        if (Array.isArray(inGraph)){
-          for (const g of inGraph){
-            const r = findRecipe(g);
-            if (r) return r;
-          }
-        }
-        // Breadcrumb / mainEntity / itemListElement / partOf
-        for (const k of ['mainEntity', 'itemListElement', 'partOf', 'articleBody', 'recipe']){
-          const v = node[k];
-          if (Array.isArray(v)){
-            for (const it of v){
-              const r = findRecipe(it);
-              if (r) return r;
-            }
-          } else if (v && typeof v === 'object'){
-            const r = findRecipe(v);
-            if (r) return r;
-          }
-        }
-        return null;
-      };
-      for (const node of stack){
-        const rec = findRecipe(node);
-        if (rec){
-          const name = sanitizeText(rec.name || doc.querySelector('h1,h2')?.textContent || 'Untitled Recipe');
-          const ingredients = ingredientsToArray(rec.recipeIngredient || rec.ingredients);
-          let instructions = [];
-          if (rec.recipeInstructions){
-            if (Array.isArray(rec.recipeInstructions)){
-              instructions = rec.recipeInstructions.map(step => {
-                if (typeof step === 'string') return sanitizeText(step);
-                if (step && typeof step === 'object') return sanitizeText(step.text || step.name);
-                return '';
-              }).filter(Boolean);
-            } else {
-              instructions = stepsToArray(rec.recipeInstructions);
-            }
-          } else {
-            // try instructions microdata
-            const howTo = doc.querySelectorAll('[itemprop="recipeInstructions"] li, .instructions li, ol li');
-            if (howTo.length){
-              instructions = Array.from(howTo).map(li=>sanitizeText(li.textContent));
-            }
-          }
-          return {
-            id: generateId(),
-            url: sourceUrl,
-            title: name,
-            ingredients,
-            instructions,
-            createdAt: Date.now(),
-            notes: ''
-          };
-        }
-      }
-    } catch(e){ /* ignore parse errors */ }
-  }
-  // Microdata fallback
-  const scope = doc.querySelector('[itemtype*="schema.org/Recipe"], [itemscope][itemtype*="Recipe"]');
-  if (scope){
-    const name = sanitizeText(scope.querySelector('[itemprop="name"]')?.textContent || doc.querySelector('h1')?.textContent || 'Untitled Recipe');
-    const ingredients = Array.from(scope.querySelectorAll('[itemprop="recipeIngredient"], [itemprop="ingredients"]')).map(el=>sanitizeText(el.textContent));
-    let instructions = Array.from(scope.querySelectorAll('[itemprop="recipeInstructions"] li')).map(el=>sanitizeText(el.textContent));
-    if (!instructions.length){
-      instructions = Array.from(doc.querySelectorAll('.instructions li, ol li')).map(el=>sanitizeText(el.textContent)).slice(0, 30);
-    }
-    return {
-      id: generateId(),
-      url: sourceUrl,
-      title: name,
-      ingredients,
-      instructions,
-      createdAt: Date.now(),
-      notes: ''
-    };
-  }
-  // Heuristic: use headings and lists
-  const text = doc.body?.innerText || '';
-  return parseFromText(text, sourceUrl);
+async function decryptEntry(record) {
+  if (!cryptoKey) throw new Error('Vault is locked.');
+  const iv = new Uint8Array(base64ToArrayBuffer(record.iv));
+  const ciphertext = base64ToArrayBuffer(record.data);
+  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, cryptoKey, ciphertext);
+  const text = new TextDecoder().decode(decrypted);
+  return JSON.parse(text);
 }
 
-async function fetchHTMLViaAllOrigins(url){
-  const encoded = encodeURIComponent(url);
-  const res = await fetch(`https://api.allorigins.win/raw?url=${encoded}`);
-  if (!res.ok) throw new Error('AllOrigins fetch failed');
-  return await res.text();
+async function loadEncryptedRecords() {
+  const stored = await idbkv.get(VAULT_KEY);
+  if (!Array.isArray(stored)) {
+    return [];
+  }
+  return stored;
 }
 
-async function fetchTextViaJina(url){
-  const u = new URL(url);
-  const proto = u.protocol.startsWith('https') ? 'https' : 'http';
-  const rurl = `https://r.jina.ai/${proto}://${u.host}${u.pathname}${u.search||''}`;
-  const res = await fetch(rurl);
-  if (!res.ok) throw new Error('Jina Reader fetch failed');
-  return await res.text();
+async function saveEncryptedRecords(records) {
+  await idbkv.set(VAULT_KEY, records);
 }
 
-async function importFromUrl(url){
-  setStatus('Fetching recipe…');
-  try{
-    const html = await fetchHTMLViaAllOrigins(url);
-    const recipe = extractRecipeFromHTML(html, url);
-    if (!recipe.title || (!recipe.ingredients.length && !recipe.instructions.length)){
-      // Fallback to Jina text
-      const text = await fetchTextViaJina(url);
-      const r2 = parseFromText(text, url);
-      if (!r2.ingredients.length && !r2.instructions.length){
-        throw new Error('Could not extract ingredients/instructions.');
-      }
-      await saveRecipe(r2);
-      setStatus('Imported via readable text fallback.');
-      return r2;
-    } else {
-      await saveRecipe(recipe);
-      setStatus('Imported successfully.');
-      return recipe;
-    }
-  } catch(e){
-    console.error(e);
-    // try Jina as last fallback
-    try {
-      const text = await fetchTextViaJina(url);
-      const r2 = parseFromText(text, url);
-      await saveRecipe(r2);
-      setStatus('Imported via readable text fallback.');
-      return r2;
-    } catch (e2){
-      console.error(e2);
-      setStatus('Sorry, we could not fetch that page. You can paste ingredients/steps manually in Edit.', 'error');
-      throw e2;
-    }
-  }
-}
-
-async function saveRecipe(recipe){
-  await idbkv.set(recipe.id, recipe);
-  await refreshList();
-  return recipe.id;
-}
-
-async function refreshList(filter=''){
-  const keys = await idbkv.keys();
-  const items = [];
-  for (const k of keys){
-    const v = await idbkv.get(k);
-    if (!v) continue;
-    items.push(v);
-  }
-  items.sort((a,b) => b.createdAt - a.createdAt);
-  listEl.innerHTML = '';
-  const q = filter.trim().toLowerCase();
-  let count = 0;
-  for (const rec of items){
-    if (q && !(rec.title.toLowerCase().includes(q) || domainFromUrl(rec.url).includes(q))) continue;
-    const li = document.createElement('li');
-    li.className = 'recipe-item';
-    li.innerHTML = \`
-      <div class="dot"></div>
-      <div class="stack">
-        <div class="title">\${rec.title}</div>
-        <div class="domain">\${domainFromUrl(rec.url)}</div>
-      </div>\`;
-    li.addEventListener('click', () => showDetail(rec.id));
-    listEl.appendChild(li);
-    count++;
-  }
-  emptyEl.hidden = count > 0;
-}
-
-async function showDetail(id){
-  const rec = await idbkv.get(id);
-  if (!rec) return;
-  detail.dataset.id = id;
-  detailTitle.textContent = rec.title || 'Untitled Recipe';
-  detailSource.innerHTML = '';
-  if (rec.url) {
-    const link = document.createElement('a');
-    link.href = rec.url;
-    link.target = '_blank';
-    link.rel = 'noopener';
-    link.textContent = domainFromUrl(rec.url) || rec.url;
-    link.title = rec.url;
-    detailSource.appendChild(link);
-  }
-  // meta can show servings / time if available later
-  detailMeta.innerHTML = '';
-  detailIngredients.innerHTML = '';
-  detailInstructions.innerHTML = '';
-  for (const ing of rec.ingredients||[]) {
-    const li = document.createElement('li'); li.textContent = ing; detailIngredients.appendChild(li);
-  }
-  for (const step of rec.instructions||[]) {
-    const li = document.createElement('li'); li.textContent = step; detailInstructions.appendChild(li);
-  }
-  notesEl.value = rec.notes || '';
-  detail.hidden = false;
-  window.scrollTo({top: detail.offsetTop - 8, behavior:'smooth'});
-}
-
-backBtn.addEventListener('click', () => { detail.hidden = true; });
-
-deleteBtn.addEventListener('click', async () => {
-  const id = detail.dataset.id;
-  if (!id) return;
-  if (!confirm('Delete this recipe?')) return;
-  await idbkv.del(id);
-  detail.hidden = true;
-  await refreshList(searchInput.value);
-});
-
-editBtn.addEventListener('click', async () => {
-  const id = detail.dataset.id;
-  const rec = await idbkv.get(id);
-  if (!rec) return;
-  editTitle.value = rec.title || '';
-  editIngredients.value = (rec.ingredients||[]).join('\n');
-  editInstructions.value = (rec.instructions||[]).join('\n');
-  editDialog.showModal();
-});
-
-saveEditBtn.addEventListener('click', async (e) => {
-  e.preventDefault();
-  const id = detail.dataset.id;
-  const rec = await idbkv.get(id);
-  if (!rec) return;
-  rec.title = sanitizeText(editTitle.value);
-  rec.ingredients = editIngredients.value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-  rec.instructions = editInstructions.value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-  await idbkv.set(id, rec);
-  editDialog.close();
-  await showDetail(id);
-  await refreshList(searchInput.value);
-  setStatus('Recipe updated.');
-});
-
-saveNotesBtn.addEventListener('click', async () => {
-  const id = detail.dataset.id;
-  const rec = await idbkv.get(id);
-  if (!rec) return;
-  rec.notes = notesEl.value;
-  await idbkv.set(id, rec);
-  setStatus('Notes saved for offline use.');
-});
-
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const url = urlInput.value.trim();
-  if (!url) return;
-  document.getElementById('fetchBtn').disabled = true;
-  try{
-    const rec = await importFromUrl(url);
-    await showDetail(rec.id);
-    urlInput.value='';
-  } catch (err) {
-    console.error(err);
-    const message = err && err.message ? err.message : 'Could not import that recipe.';
-    setStatus(`Import failed: ${message}`, 'error');
-  } finally {
-    document.getElementById('fetchBtn').disabled = false;
-  }
-});
-
-searchInput.addEventListener('input', () => refreshList(searchInput.value));
-
-exportBtn.addEventListener('click', async () => {
-  const keys = await idbkv.keys();
-  const items = [];
-  for (const k of keys){
-    const v = await idbkv.get(k);
-    if (v) items.push(v);
-  }
-  const blob = new Blob([JSON.stringify(items, null, 2)], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'recipes-export.json';
-  document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
-});
-
-importBtn.addEventListener('click', ()=> importFile.click());
-importFile.addEventListener('change', async () => {
-  const file = importFile.files[0];
-  if (!file) return;
-  try{
-    const text = await file.text();
-    const parsed = JSON.parse(text);
-    let recipes = [];
-    if (Array.isArray(parsed)) {
-      recipes = parsed;
-    } else if (Array.isArray(parsed.recipes)) {
-      recipes = parsed.recipes;
-    } else if (Array.isArray(parsed.items)) {
-      recipes = parsed.items;
-    } else if (parsed && typeof parsed === 'object') {
-      recipes = Object.values(parsed).filter(val => val && typeof val === 'object' && (
-        val.title || val.name || val.ingredients || val.recipeIngredient
-      ));
-    }
-    if (!recipes.length) {
-      throw new Error('No recipes found in that file.');
-    }
-    let imported = 0;
-    for (const raw of recipes){
-      if (!raw || typeof raw !== 'object') continue;
-      const ingredientsSource = raw.ingredients ?? raw.recipeIngredient;
-      const instructionsSource = raw.instructions ?? raw.recipeInstructions;
-      const createdAtCandidate = Number(raw.createdAt);
-      const createdAt = Number.isFinite(createdAtCandidate) && createdAtCandidate > 0 ? createdAtCandidate : Date.now();
-      const recipe = {
-        id: raw.id || generateId(),
-        url: sanitizeText(raw.url || raw.source || ''),
-        title: sanitizeText(raw.title || raw.name || 'Untitled Recipe'),
-        ingredients: ingredientsToArray(ingredientsSource),
-        instructions: stepsToArray(instructionsSource),
-        createdAt,
-        notes: sanitizeText(raw.notes || '')
-      };
-      await idbkv.set(recipe.id, recipe);
-      imported++;
-    }
-    if (!imported) {
-      throw new Error('No valid recipes found in that file.');
-    }
-    await refreshList(searchInput.value);
-    setStatus(`Imported ${imported} recipe${imported === 1 ? '' : 's'}.`);
-  }catch(e){
-    console.error(e);
-    setStatus(`Import failed: ${e.message || 'invalid file.'}`, 'error');
-  } finally {
-    importFile.value = '';
-  }
-});
-
-const OFFLINE_ASSETS = [
-  './',
-  './index.html',
-  './css/styles.css',
-  './js/app.js',
-  './js/idb-keyval.js',
-  './assets/icon-192.png',
-  './assets/icon-512.png',
-  './manifest.webmanifest',
-  './sw.js'
-];
-
-async function forceUpdateApp(){
-  if (!updateBtn) return;
-  if (!('caches' in window)) {
-    setStatus('Cache storage is not supported in this browser.', 'error');
+function renderVault() {
+  videoListEl.innerHTML = '';
+  if (!decryptedEntries.length) {
+    emptyVaultEl.hidden = false;
     return;
   }
-  updateBtn.disabled = true;
-  setStatus('Refreshing app files…');
-  let reloadScheduled = false;
-  try {
-    const cacheNames = await caches.keys();
-    await Promise.all(cacheNames.map(name => caches.delete(name)));
-    if ('serviceWorker' in navigator) {
+  emptyVaultEl.hidden = true;
+  const sorted = [...decryptedEntries].sort((a, b) => b.createdAt - a.createdAt);
+  for (const entry of sorted) {
+    const li = document.createElement('li');
+    li.className = 'video-item';
+
+    const header = document.createElement('div');
+    header.className = 'video-item-header';
+
+    const title = document.createElement('h3');
+    title.textContent = entry.title || 'Untitled video';
+    header.appendChild(title);
+
+    const actions = document.createElement('div');
+    actions.className = 'video-actions';
+
+    const openLink = document.createElement('a');
+    openLink.href = entry.url;
+    openLink.target = '_blank';
+    openLink.rel = 'noopener';
+    openLink.className = 'btn-link';
+    openLink.textContent = 'Open video';
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'delete-btn';
+    deleteBtn.textContent = 'Remove';
+    deleteBtn.addEventListener('click', () => confirmDelete(entry.id));
+
+    actions.append(openLink, deleteBtn);
+    header.appendChild(actions);
+    li.appendChild(header);
+
+    const meta = document.createElement('div');
+    meta.className = 'video-meta';
+    const date = new Date(entry.createdAt || Date.now());
+    const domain = (() => {
       try {
-        const reg = await navigator.serviceWorker.getRegistration();
-        await reg?.update();
-      } catch (swError) {
-        console.warn('Service worker update failed', swError);
+        return new URL(entry.url).hostname.replace(/^www\./, '');
+      } catch (e) {
+        return entry.url;
       }
+    })();
+
+    const domainSpan = document.createElement('span');
+    domainSpan.textContent = domain;
+    meta.appendChild(domainSpan);
+
+    const timeSpan = document.createElement('span');
+    timeSpan.textContent = date.toLocaleString();
+    meta.appendChild(timeSpan);
+    li.appendChild(meta);
+
+    if (entry.notes) {
+      const notes = document.createElement('p');
+      notes.textContent = entry.notes;
+      li.appendChild(notes);
     }
-    await Promise.all(OFFLINE_ASSETS.map(async (asset) => {
-      try {
-        const res = await fetch(asset, {cache: 'reload'});
-        if (!res.ok) {
-          throw new Error(`${res.status} ${res.statusText}`.trim());
-        }
-      } catch (assetError) {
-        console.warn('Asset refresh failed', asset, assetError);
-        throw assetError;
-      }
-    }));
-    setStatus('App files refreshed. Reloading…');
-    reloadScheduled = true;
-    setTimeout(() => window.location.reload(), 500);
-  } catch (error) {
-    console.error(error);
-    const message = error && error.message ? error.message : 'Unknown error.';
-    setStatus(`Update failed: ${message}`, 'error');
-  } finally {
-    if (!reloadScheduled) {
-      updateBtn.disabled = false;
+
+    videoListEl.appendChild(li);
+  }
+}
+
+async function confirmDelete(id) {
+  if (!unlocked) return;
+  const entry = decryptedEntries.find(item => item.id === id);
+  if (!entry) return;
+  if (!confirm(`Remove "${entry.title}" from the vault?`)) {
+    return;
+  }
+  decryptedEntries = decryptedEntries.filter(item => item.id !== id);
+  const encrypted = await Promise.all(decryptedEntries.map(encryptEntry));
+  await saveEncryptedRecords(encrypted);
+  renderVault();
+  setStatus(vaultStatusEl, 'Video removed.', 'success');
+}
+
+async function handleAddLink(event) {
+  event.preventDefault();
+  if (!unlocked) {
+    setStatus(vaultStatusEl, 'Unlock the vault before adding videos.', 'error');
+    return;
+  }
+  const title = titleInput.value.trim();
+  const url = urlInput.value.trim();
+  const notes = notesInput.value.trim();
+  if (!title || !url) {
+    setStatus(vaultStatusEl, 'A title and a valid link are required.', 'error');
+    return;
+  }
+  try {
+    new URL(url);
+  } catch (e) {
+    setStatus(vaultStatusEl, 'Please provide a valid URL.', 'error');
+    return;
+  }
+
+  const record = {
+    id: generateId(),
+    title,
+    url,
+    notes,
+    createdAt: Date.now()
+  };
+
+  decryptedEntries.push(record);
+  const encrypted = await Promise.all(decryptedEntries.map(encryptEntry));
+  await saveEncryptedRecords(encrypted);
+  renderVault();
+  addLinkForm.reset();
+  titleInput.focus();
+  setStatus(vaultStatusEl, 'Video saved to the pantry.', 'success');
+}
+
+function showVault() {
+  vaultPanel.hidden = false;
+  setStatus(statusEl, 'The secret compartment slides open.', 'success');
+  renderVault();
+  if (pendingSharedUrl) {
+    urlInput.value = pendingSharedUrl;
+    titleInput.focus();
+    setStatus(vaultStatusEl, 'Shared link loaded. Give it a title and save.', 'success');
+    pendingSharedUrl = null;
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('url');
+      url.searchParams.delete('title');
+      url.searchParams.delete('text');
+      window.history.replaceState({}, document.title, url.toString());
+    } catch (e) {
+      // ignore
     }
   }
 }
 
-updateBtn?.addEventListener('click', forceUpdateApp);
+function hideVault() {
+  vaultPanel.hidden = true;
+  decryptedEntries = [];
+  cryptoKey = null;
+  unlocked = false;
+  setStatus(statusEl, 'The lid closes over the secret stash.', 'info');
+  addLinkForm.reset();
+  setStatus(vaultStatusEl, '');
+}
 
-// On load
-refreshList();
+function openPasswordDialog(mode) {
+  dialogMode = mode;
+  passwordError.textContent = '';
+  passwordInput.value = '';
+  confirmPasswordInput.value = '';
+  const hasPassword = hasStoredPassword();
+  const creating = mode === 'create' || !hasPassword;
+  confirmPasswordWrap.hidden = !creating;
+  confirmPasswordInput.required = creating;
+  passwordInput.autocomplete = creating ? 'new-password' : 'current-password';
+  confirmPasswordInput.autocomplete = 'new-password';
+  passwordSubmitBtn.textContent = creating ? 'Save password' : 'Unlock';
+  passwordDialogTitle.textContent = creating ? 'Create your vault password' : 'Unlock the recipe box';
+  passwordDialogDescription.textContent = creating
+    ? 'Choose a strong password. It will encrypt your video links on this device.'
+    : 'Enter the password to reveal your encrypted video pantry.';
+  passwordDialog.showModal();
+  requestAnimationFrame(() => passwordInput.focus());
+}
 
-// --- Web Share Target: handle ?url= on launch ---
-(function handleShareTargetOnLoad(){
+function closePasswordDialog() {
+  if (passwordDialog.open) {
+    passwordDialog.close();
+  }
+}
+
+function hasStoredPassword() {
+  return Boolean(localStorage.getItem(SALT_KEY) && localStorage.getItem(HASH_KEY));
+}
+
+async function unlockVault(password) {
+  const saltB64 = localStorage.getItem(SALT_KEY);
+  const hashStored = localStorage.getItem(HASH_KEY);
+  if (!saltB64 || !hashStored) {
+    throw new Error('No password is configured.');
+  }
+  const saltBuffer = base64ToArrayBuffer(saltB64);
+  const hash = await derivePasswordHash(password, saltBuffer);
+  if (hash !== hashStored) {
+    throw new Error('Incorrect password.');
+  }
+  cryptoKey = await deriveEncryptionKey(password, saltBuffer);
+  const encryptedRecords = await loadEncryptedRecords();
+  decryptedEntries = [];
+  for (const record of encryptedRecords) {
+    try {
+      const entry = await decryptEntry(record);
+      decryptedEntries.push(entry);
+    } catch (e) {
+      console.error('Failed to decrypt entry', e);
+    }
+  }
+  unlocked = true;
+  showVault();
+}
+
+async function createVaultPassword(password) {
+  const confirm = confirmPasswordInput.value;
+  if (password !== confirm) {
+    throw new Error('Passwords do not match.');
+  }
+  if (password.length < 8) {
+    throw new Error('Use at least 8 characters.');
+  }
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const saltB64 = arrayBufferToBase64(salt.buffer);
+  const hash = await derivePasswordHash(password, salt.buffer);
+  localStorage.setItem(SALT_KEY, saltB64);
+  localStorage.setItem(HASH_KEY, hash);
+  cryptoKey = await deriveEncryptionKey(password, salt.buffer);
+  decryptedEntries = [];
+  await saveEncryptedRecords([]);
+  unlocked = true;
+  showVault();
+  setStatus(vaultStatusEl, 'Vault ready. Add your first video!', 'success');
+}
+
+passwordForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  setStatus(passwordError, '');
+  const password = passwordInput.value;
+  if (!password) {
+    setStatus(passwordError, 'Password is required.', 'error');
+    return;
+  }
+  try {
+    if (!hasStoredPassword() || dialogMode === 'create') {
+      await createVaultPassword(password);
+    } else {
+      await unlockVault(password);
+      setStatus(vaultStatusEl, 'Vault unlocked.', 'success');
+    }
+    closePasswordDialog();
+  } catch (error) {
+    console.error(error);
+    setStatus(passwordError, error.message || 'Unable to unlock the vault.', 'error');
+  }
+});
+
+cancelPasswordBtn.addEventListener('click', () => {
+  closePasswordDialog();
+});
+
+lockBtn.addEventListener('click', () => {
+  hideVault();
+});
+
+addLinkForm.addEventListener('submit', (event) => {
+  handleAddLink(event).catch(err => {
+    console.error(err);
+    setStatus(vaultStatusEl, err.message || 'Unable to save that link.', 'error');
+  });
+});
+
+function handleSecretTap(step) {
+  if (secretTimer) {
+    clearTimeout(secretTimer);
+  }
+  secretTimer = setTimeout(() => {
+    secretIndex = 0;
+  }, SECRET_RESET_MS);
+
+  if (SECRET_SEQUENCE[secretIndex] === step) {
+    secretIndex += 1;
+    if (secretIndex === SECRET_SEQUENCE.length) {
+      secretIndex = 0;
+      clearTimeout(secretTimer);
+      secretTimer = null;
+      setStatus(statusEl, 'A soft click echoes from the recipe box.', 'success');
+      openPasswordDialog(hasStoredPassword() ? 'unlock' : 'create');
+    } else {
+      setStatus(statusEl, 'The box creaks softly…', 'info');
+    }
+  } else {
+    secretIndex = step === SECRET_SEQUENCE[0] ? 1 : 0;
+    setStatus(statusEl, 'Nothing happens. Try another spot.', 'error');
+  }
+}
+
+for (const pad of document.querySelectorAll('.secret-pad')) {
+  pad.addEventListener('click', (event) => {
+    event.preventDefault();
+    const step = pad.dataset.step;
+    handleSecretTap(step);
+  });
+}
+
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  deferredPrompt = event;
+  if (installBtn) {
+    installBtn.hidden = false;
+  }
+});
+
+installBtn?.addEventListener('click', async () => {
+  installBtn.hidden = true;
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  await deferredPrompt.userChoice;
+  deferredPrompt = null;
+});
+
+function parseSharedUrl() {
   try {
     const params = new URLSearchParams(window.location.search);
     const sharedUrl = params.get('url');
     if (sharedUrl) {
-      urlInput.value = sharedUrl;
-      importFromUrl(sharedUrl)
-        .then(r => showDetail(r.id))
-        .catch(() => setStatus('Could not import shared link.', 'error'));
+      pendingSharedUrl = sharedUrl;
+      if (params.get('title')) {
+        titleInput.value = params.get('title');
+      }
+      setStatus(statusEl, 'A new video is waiting to be stashed.', 'info');
     }
-  } catch (e) {
-    console.warn('Share Target parse failed', e);
+  } catch (error) {
+    console.warn('Could not parse shared URL', error);
   }
-})();
-// --- end share target handler ---
+}
 
+if (!supportsEncryption()) {
+  setStatus(statusEl, 'This browser does not support the required encryption features.', 'error');
+  for (const pad of document.querySelectorAll('.secret-pad')) {
+    pad.disabled = true;
+  }
+  addLinkForm.querySelector('button[type="submit"]').disabled = true;
+} else {
+  parseSharedUrl();
+}
+
+// Initial render
+renderVault();
