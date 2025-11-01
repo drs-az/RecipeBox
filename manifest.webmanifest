@@ -1,6 +1,6 @@
 {
   "name": "Recipe Box Vault",
-  "short_name": "Vault",
+  "short_name": "Recipes",
   "description": "A cozy recipe box facade hiding an encrypted vault for your treasured video links.",
   "start_url": "./index.html",
   "display": "standalone",
