@@ -7,9 +7,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" sizes="192x192" href="assets/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
-  <title>Recipe Box Vault</title>
+  <title>Recipe Box Kitchen</title>
   <link rel="stylesheet" href="css/styles.css">
-  <meta name="description" content="A cozy recipe box that hides an encrypted collection of your favorite video links behind a secret password.">
+  <meta name="description" content="A cozy recipe box app filled with seasonal menus, chef notes, and a private nook for your own kitchen secrets.">
 </head>
 <body>
   <header class="app-header">
@@ -23,8 +23,8 @@
         <button class="secret-pad pad-center" data-step="center" aria-label="Tap the brass label"></button>
       </div>
       <div class="brand-copy">
-        <h1>Recipe Box Vault</h1>
-        <p class="tagline">A secret pantry for your treasured video lessons</p>
+        <h1>Recipe Box Kitchen</h1>
+        <p class="tagline">Seasonal recipes, pantry guides, and cozy dinner ideas</p>
       </div>
     </div>
     <button id="installBtn" class="btn secondary" hidden>Install</button>
@@ -32,41 +32,159 @@
 
   <main class="container">
     <section class="card intro-card">
-      <h2>Welcome back to the kitchen</h2>
-      <p>Tap around the recipe box artwork to find the hidden latch. Once inside, you can stash the cooking videos that inspire you, knowing they stay private and encrypted on this device.</p>
-      <p class="hint">Hint: left hinge, right hinge, then the brass label unlock the secret door.</p>
+      <div class="intro-copy">
+        <h2>What's simmering tonight?</h2>
+        <p>Flip through our newest kitchen inspirations &mdash; from slow-simmered soups to bright, crunchy salads. Tap the keepsake recipe box to explore featured dishes and curate your own weeknight lineup.</p>
+        <ul class="intro-highlights">
+          <li><strong>Seasonal spotlights</strong> on produce at its peak.</li>
+          <li><strong>Step-by-step guides</strong> for confident cooking.</li>
+          <li><strong>Chef's tasting notes</strong> to help you improvise.</li>
+        </ul>
+      </div>
+      <aside class="kitchen-tip">
+        <h3>Kitchen tip</h3>
+        <p>Warm up the hinges by tapping left, right, then the brass label &mdash; it's the rhythm we use to gently lift the lid without scuffing the finish.</p>
+      </aside>
       <div id="status" class="status" role="status" aria-live="polite"></div>
+    </section>
+
+    <section class="card recipe-collection" aria-labelledby="featuredRecipes">
+      <div class="section-header">
+        <div>
+          <h2 id="featuredRecipes">Featured Supper Club Recipes</h2>
+          <p class="section-subtitle">Handpicked classics for cozy evenings and weekend gatherings.</p>
+        </div>
+        <a class="btn secondary" href="#" aria-label="Browse the complete recipe archive">Browse archive</a>
+      </div>
+      <div class="recipe-grid">
+        <article class="recipe-card">
+          <div class="recipe-meta">
+            <span class="tag seasonal">Winter comfort</span>
+            <span>Prep 20m</span>
+            <span>Cook 1h 30m</span>
+          </div>
+          <h3>Slow-Roasted Tomato Soup</h3>
+          <p>Roasted Roma tomatoes, caramelized shallots, and a swirl of basil cream build layers of deep flavor. Serve with buttery sourdough croutons and a crack of black pepper.</p>
+          <ul class="recipe-ingredients">
+            <li>Roma tomatoes</li>
+            <li>Shallots</li>
+            <li>Vegetable stock</li>
+            <li>Fresh basil</li>
+          </ul>
+          <p class="recipe-note">Try finishing with smoked paprika oil for a cozy fire-side aroma.</p>
+        </article>
+        <article class="recipe-card">
+          <div class="recipe-meta">
+            <span class="tag fresh">Market fresh</span>
+            <span>Prep 15m</span>
+            <span>Cook 25m</span>
+          </div>
+          <h3>Citrus &amp; Fennel Salad</h3>
+          <p>Ruby grapefruit, shaved fennel, and jewel-toned radicchio tossed with toasted pistachios and lemon-honey vinaigrette.</p>
+          <ul class="recipe-ingredients">
+            <li>Grapefruit</li>
+            <li>Fennel bulb</li>
+            <li>Radicchio</li>
+            <li>Pistachios</li>
+          </ul>
+          <p class="recipe-note">Sprinkle with flaky sea salt right before serving to wake up every bite.</p>
+        </article>
+        <article class="recipe-card">
+          <div class="recipe-meta">
+            <span class="tag crowd">Gathering ready</span>
+            <span>Prep 30m</span>
+            <span>Cook 2h</span>
+          </div>
+          <h3>Brown Butter Mushroom Lasagna</h3>
+          <p>Layers of hand-rolled pasta, wild mushrooms, and brown butter béchamel, finished with thyme and aged Asiago.</p>
+          <ul class="recipe-ingredients">
+            <li>Wild mushrooms</li>
+            <li>Fresh pasta sheets</li>
+            <li>Brown butter béchamel</li>
+            <li>Aged Asiago</li>
+          </ul>
+          <p class="recipe-note">Let the lasagna rest for 15 minutes so the layers set for picture-perfect slices.</p>
+        </article>
+        <article class="recipe-card">
+          <div class="recipe-meta">
+            <span class="tag sweet">Sweet finish</span>
+            <span>Prep 25m</span>
+            <span>Chill 4h</span>
+          </div>
+          <h3>Vanilla Bean Panna Cotta</h3>
+          <p>Silky vanilla bean custard capped with roasted strawberries and balsamic syrup for a bright, velvety dessert.</p>
+          <ul class="recipe-ingredients">
+            <li>Heavy cream</li>
+            <li>Vanilla bean</li>
+            <li>Gelatin</li>
+            <li>Strawberries</li>
+          </ul>
+          <p class="recipe-note">Infuse the cream overnight for a deeper vanilla perfume.</p>
+        </article>
+        <article class="recipe-card">
+          <div class="recipe-meta">
+            <span class="tag pantry">Pantry hero</span>
+            <span>Prep 10m</span>
+            <span>Cook 35m</span>
+          </div>
+          <h3>Charred Broccolini &amp; Tahini Bowls</h3>
+          <p>Toasted farro, charred broccolini, pickled onions, and lemon-tahini dressing crowned with crispy chickpeas.</p>
+          <ul class="recipe-ingredients">
+            <li>Broccolini</li>
+            <li>Cooked farro</li>
+            <li>Tahini</li>
+            <li>Crispy chickpeas</li>
+          </ul>
+          <p class="recipe-note">Meal-prep friendly: dress just before serving to keep greens vibrant.</p>
+        </article>
+        <article class="recipe-card">
+          <div class="recipe-meta">
+            <span class="tag brunch">Brunch favorite</span>
+            <span>Prep 25m</span>
+            <span>Cook 20m</span>
+          </div>
+          <h3>Lemon Ricotta Pancakes</h3>
+          <p>Cloud-like pancakes scented with lemon zest, topped with macerated blueberries and a dollop of honeyed ricotta.</p>
+          <ul class="recipe-ingredients">
+            <li>Ricotta</li>
+            <li>Lemon zest</li>
+            <li>Blueberries</li>
+            <li>Maple syrup</li>
+          </ul>
+          <p class="recipe-note">Fold whipped egg whites into the batter for an airy lift.</p>
+        </article>
+      </div>
     </section>
 
     <section id="vaultPanel" class="card vault" hidden>
       <div class="vault-header">
         <div>
-          <h2>Video Pantry</h2>
-          <p class="vault-subtitle">Encrypted and tucked safely inside your recipe box</p>
+          <h2>Saved Kitchen Notes</h2>
+          <p class="vault-subtitle">Tucked away for your eyes only, right inside the recipe box lid.</p>
         </div>
         <button id="lockBtn" class="btn subtle" type="button">Lock</button>
       </div>
 
       <form id="addLinkForm" class="stack" autocomplete="off">
         <div class="field">
-          <label for="videoTitle">Video title</label>
-          <input id="videoTitle" name="videoTitle" type="text" placeholder="Sourdough folding masterclass" required>
+          <label for="videoTitle">Title</label>
+          <input id="videoTitle" name="videoTitle" type="text" placeholder="Grandma's Sunday Sauce" required>
         </div>
         <div class="field">
-          <label for="videoUrl">Video link</label>
-          <input id="videoUrl" name="videoUrl" type="url" placeholder="https://example.com/watch?v=…" required>
+          <label for="videoUrl">Link or reference</label>
+          <input id="videoUrl" name="videoUrl" type="url" placeholder="https://example.com/recipe/sunday-sauce" required>
         </div>
         <div class="field">
           <label for="videoNotes">Notes <span class="muted">(optional)</span></label>
-          <textarea id="videoNotes" name="videoNotes" rows="3" placeholder="Why this video matters"></textarea>
+          <textarea id="videoNotes" name="videoNotes" rows="3" placeholder="Serving notes, tweaks, or timing reminders"></textarea>
         </div>
-        <button class="btn primary" type="submit" id="saveLinkBtn">Save video link</button>
+        <button class="btn primary" type="submit" id="saveLinkBtn">Save private note</button>
       </form>
 
       <div id="vaultStatus" class="status" role="status" aria-live="polite"></div>
 
       <ul id="videoList" class="video-list" aria-live="polite"></ul>
-      <p id="emptyVault" class="empty">No videos saved yet. Add your first one above.</p>
+      <p id="emptyVault" class="empty">No notes saved yet. Tuck away your first secret above.</p>
     </section>
   </main>
 
@@ -76,8 +194,8 @@
 
   <dialog id="passwordDialog" aria-modal="true">
     <form id="passwordForm" method="dialog">
-      <h2 id="passwordDialogTitle">Unlock the recipe box</h2>
-      <p id="passwordDialogDescription">Enter the secret password to reveal your encrypted video pantry.</p>
+      <h2 id="passwordDialogTitle">Lift the recipe box lid</h2>
+      <p id="passwordDialogDescription">Only trusted chefs may peek inside these private kitchen notes.</p>
       <label class="field">Password
         <input id="passwordInput" name="password" type="password" required autocomplete="current-password">
       </label>
