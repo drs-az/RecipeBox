@@ -7,87 +7,90 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" sizes="192x192" href="assets/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
-  <title>Recipe Box</title>
+  <title>Recipe Box Vault</title>
   <link rel="stylesheet" href="css/styles.css">
-  <meta name="description" content="A mobile-friendly PWA to save, view, and use recipes offline. Paste a link and we'll extract the details.">
+  <meta name="description" content="A cozy recipe box that hides an encrypted collection of your favorite video links behind a secret password.">
 </head>
 <body>
   <header class="app-header">
     <div class="brand">
-      <span class="brand-icon" aria-hidden="true">🥣</span>
+      <div class="brand-art" id="recipeBoxTheme" aria-hidden="true">
+        <div class="box-lid"></div>
+        <div class="box-body"></div>
+        <div class="box-label">Recipe Box</div>
+        <button class="secret-pad pad-left" data-step="left" aria-label="Tap the left hinge"></button>
+        <button class="secret-pad pad-right" data-step="right" aria-label="Tap the right hinge"></button>
+        <button class="secret-pad pad-center" data-step="center" aria-label="Tap the brass label"></button>
+      </div>
       <div class="brand-copy">
-        <h1>Recipe Box</h1>
-        <p class="tagline">Collect, organize, and savor your favorite dishes</p>
+        <h1>Recipe Box Vault</h1>
+        <p class="tagline">A secret pantry for your treasured video lessons</p>
       </div>
     </div>
     <button id="installBtn" class="btn secondary" hidden>Install</button>
   </header>
 
   <main class="container">
-    <section class="card">
-      <h2>Add a Recipe</h2>
-      <form id="fetchForm" class="grid">
-        <label for="recipeUrl" class="sr-only">Recipe URL</label>
-        <input id="recipeUrl" type="url" required placeholder="https://example.com/your-favorite-recipe">
-        <button class="btn primary" type="submit" id="fetchBtn">Import</button>
-      </form>
-      <p class="helper">Tip: Most sites with <code>schema.org/Recipe</code> will import perfectly.</p>
-      <div id="status" class="status" aria-live="polite"></div>
+    <section class="card intro-card">
+      <h2>Welcome back to the kitchen</h2>
+      <p>Tap around the recipe box artwork to find the hidden latch. Once inside, you can stash the cooking videos that inspire you, knowing they stay private and encrypted on this device.</p>
+      <p class="hint">Hint: left hinge, right hinge, then the brass label unlock the secret door.</p>
+      <div id="status" class="status" role="status" aria-live="polite"></div>
     </section>
 
-    <section class="card">
-      <div class="section-header">
-        <h2>Your Recipes</h2>
-        <div class="actions">
-          <input id="searchInput" type="search" placeholder="Search saved recipes…">
-          <button id="updateBtn" class="btn subtle" type="button">Update</button>
-          <button id="exportBtn" class="btn subtle" type="button">Export</button>
-          <input type="file" id="importFile" accept="application/json" hidden>
-          <button id="importBtn" class="btn subtle" type="button">Import</button>
+    <section id="vaultPanel" class="card vault" hidden>
+      <div class="vault-header">
+        <div>
+          <h2>Video Pantry</h2>
+          <p class="vault-subtitle">Encrypted and tucked safely inside your recipe box</p>
         </div>
+        <button id="lockBtn" class="btn subtle" type="button">Lock</button>
       </div>
-      <ul id="recipeList" class="recipe-list"></ul>
-      <p id="emptyState" class="empty">No recipes yet. Import one above.</p>
-    </section>
 
-    <section id="detailView" class="detail card" hidden>
-      <div class="detail-header">
-        <button id="backBtn" class="btn subtle" type="button">&larr; Back</button>
-        <div class="spacer"></div>
-        <button id="editBtn" class="btn subtle" type="button">Edit</button>
-        <button id="deleteBtn" class="btn danger" type="button">Delete</button>
-      </div>
-      <h2 id="detailTitle"></h2>
-      <p id="detailSource" class="source"></p>
-      <div class="meta" id="detailMeta"></div>
-      <h3>Ingredients</h3>
-      <ul id="detailIngredients" class="ingredients"></ul>
-      <h3>Steps</h3>
-      <ol id="detailInstructions" class="instructions"></ol>
-      <details id="notesWrap">
-        <summary>Notes</summary>
-        <textarea id="detailNotes" placeholder="Add your notes (offline-capable)…"></textarea>
-        <button id="saveNotesBtn" class="btn primary" type="button">Save Notes</button>
-      </details>
-    </section>
-
-    <dialog id="editDialog">
-      <form id="editForm" method="dialog">
-        <h3>Edit Recipe</h3>
-        <label>Title <input id="editTitle" required></label>
-        <label>Ingredients <textarea id="editIngredients" rows="8" placeholder="One per line"></textarea></label>
-        <label>Steps <textarea id="editInstructions" rows="10" placeholder="One per line or numbered"></textarea></label>
-        <menu>
-          <button value="cancel" class="btn subtle">Cancel</button>
-          <button id="saveEditBtn" value="default" class="btn primary">Save</button>
-        </menu>
+      <form id="addLinkForm" class="stack" autocomplete="off">
+        <div class="field">
+          <label for="videoTitle">Video title</label>
+          <input id="videoTitle" name="videoTitle" type="text" placeholder="Sourdough folding masterclass" required>
+        </div>
+        <div class="field">
+          <label for="videoUrl">Video link</label>
+          <input id="videoUrl" name="videoUrl" type="url" placeholder="https://example.com/watch?v=…" required>
+        </div>
+        <div class="field">
+          <label for="videoNotes">Notes <span class="muted">(optional)</span></label>
+          <textarea id="videoNotes" name="videoNotes" rows="3" placeholder="Why this video matters"></textarea>
+        </div>
+        <button class="btn primary" type="submit" id="saveLinkBtn">Save video link</button>
       </form>
-    </dialog>
+
+      <div id="vaultStatus" class="status" role="status" aria-live="polite"></div>
+
+      <ul id="videoList" class="video-list" aria-live="polite"></ul>
+      <p id="emptyVault" class="empty">No videos saved yet. Add your first one above.</p>
+    </section>
   </main>
 
   <footer class="app-footer">
-    <small>Works offline · Install from your browser menu · <a href="https://schema.org/Recipe" target="_blank" rel="noopener">Recipe Schema</a></small>
+    <small>Encrypted vault · Works offline · Guarded by your secret passphrase</small>
   </footer>
+
+  <dialog id="passwordDialog" aria-modal="true">
+    <form id="passwordForm" method="dialog">
+      <h2 id="passwordDialogTitle">Unlock the recipe box</h2>
+      <p id="passwordDialogDescription">Enter the secret password to reveal your encrypted video pantry.</p>
+      <label class="field">Password
+        <input id="passwordInput" name="password" type="password" required autocomplete="current-password">
+      </label>
+      <label class="field" id="confirmPasswordWrap" hidden>Confirm password
+        <input id="confirmPasswordInput" name="confirmPassword" type="password" autocomplete="new-password">
+      </label>
+      <menu>
+        <button type="button" class="btn subtle" id="cancelPasswordBtn">Cancel</button>
+        <button type="submit" class="btn primary" id="passwordSubmitBtn">Unlock</button>
+      </menu>
+      <p id="passwordError" class="status error" role="alert"></p>
+    </form>
+  </dialog>
 
   <script src="js/idb-keyval.js"></script>
   <script src="js/app.js" type="module"></script>
